@@ -1,0 +1,8 @@
+symbol,index_name,country
+^GSPC,S&P 500,USA
+^FTSE,FTSE 100,UK
+^GDAXI,DAX,Germany
+^N225,Nikkei 225,Japan
+000001.SS,SSE Composite,China
+^NSEI,NIFTY 50,India
+^BVSP,Bovespa,Brazil
