@@ -1,72 +1,43 @@
 import os
-import csv
+import pandas as pd
 import requests
 from dotenv import load_dotenv
 
 # Load environment variables
-load_dotenv(dotenv_path="/home/roymnel/Documents/OnDemand_GovIntel/.env")
+load_dotenv()
 
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
-CSV_PATH = "/home/roymnel/Documents/OnDemand_GovIntel/indexes.csv"
-OUTPUT_PATH = "/home/roymnel/Documents/OnDemand_GovIntel/summary_results.txt"
+# Get the Finnhub API key from the .env file
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 
-# Get stock symbols from CSV
-def get_stock_symbols(filepath):
-    symbols = []
-    with open(filepath, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if row:  # avoid empty lines
-                symbols.append(row[0].strip().upper())
-    return symbols
+if not FINNHUB_API_KEY:
+    raise ValueError("Missing FINNHUB_API_KEY in .env file")
 
-# Fetch data from Finnhub
-def fetch_finnhub_data(symbol):
-    url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={FINNHUB_API_KEY}"
+# Load indexes.csv from the same folder as this script
+current_dir = os.path.dirname(__file__)
+csv_path = os.path.join(current_dir, 'indexes.csv')
+
+# Read the stock symbols
+try:
+    df = pd.read_csv(csv_path)
+    symbols = df['symbol'].dropna().tolist()
+except Exception as e:
+    raise FileNotFoundError(f"Could not read {csv_path}: {e}")
+
+# Call Finnhub API for each symbol
+def fetch_stock_data(symbol):
+    url = f'https://finnhub.io/api/v1/quote?symbol={symbol}&token={FINNHUB_API_KEY}'
     response = requests.get(url)
-    response.raise_for_status()
-    return response.json()
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {'error': f"Failed to fetch {symbol} (HTTP {response.status_code})"}
 
-# Query the LLM for analysis
-def query_llm(symbol, data):
-    url = "https://api.together.xyz/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {TOGETHER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        "messages": [
-            {"role": "system", "content": "You are a financial analyst."},
-            {"role": "user", "content": f"Analyze stock {symbol} with this data: {data}. Provide an investment insight."}
-        ]
-    }
-    response = requests.post(url, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()['choices'][0]['message']['content']
-
-# Main loop
+# Run the query loop
 def main():
-    symbols = get_stock_symbols(CSV_PATH)
-    results = []
-
     for symbol in symbols:
-        try:
-            data = fetch_finnhub_data(symbol)
-            summary = query_llm(symbol, data)
-            entry = f"\n--- {symbol} ---\n{summary}\n"
-            print(entry)
-            results.append(entry)
-        except Exception as e:
-            error_msg = f"\n--- {symbol} ---\nError: {str(e)}\n"
-            print(error_msg)
-            results.append(error_msg)
+        print(f"Fetching data for: {symbol}")
+        data = fetch_stock_data(symbol)
+        print(data)
 
-    # Save to file
-    with open(OUTPUT_PATH, "w") as f:
-        f.writelines(results)
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
-
